@@ -131,13 +131,22 @@ router.post('/', async (req, res) => {
     const clientUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app').trim().replace(/\/+$/, '');
     const serverUrl = (process.env.SERVER_URL || `${req.protocol}://${req.get('host')}`).trim().replace(/\/+$/, '');
 
-    await emailService.sendVerificationEmail({
-      email: normalizedEmail,
-      name: birthday.name,
-      token: verificationToken,
-      clientUrl,
-      serverUrl,
-    });
+    try {
+      await emailService.sendVerificationEmail({
+        email: normalizedEmail,
+        name: birthday.name,
+        dob: birthday.dob,
+        token: verificationToken,
+        clientUrl,
+        serverUrl,
+      });
+    } catch (emailErr) {
+      console.error('[ROUTE] Failed to send verification email:', emailErr.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Could not send verification email. Please check your email address or try again later.',
+      });
+    }
 
     res.status(201).json({
       success: true,
