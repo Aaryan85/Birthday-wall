@@ -6,6 +6,27 @@ import { sendDailyBirthdayWishes } from '../services/scheduler.js';
 
 const router = express.Router();
 
+/**
+ * Sanitizes and extracts clean URL from environment variables
+ * Strips accidental variable names, markdown links, brackets, and trailing slashes
+ */
+function cleanUrl(rawUrl, fallback) {
+  if (!rawUrl || typeof rawUrl !== 'string') return fallback;
+  
+  let cleaned = rawUrl.trim();
+  // Remove accidental "VARIABLE_NAME=" prefixes
+  cleaned = cleaned.replace(/^[A-Z_]+=\s*/, '');
+  // Extract URL from markdown format [text](url) or (url) or [url]
+  const urlMatch = cleaned.match(/https?:\/\/[^\s)\]'"]+/);
+  if (urlMatch) {
+    cleaned = urlMatch[0];
+  }
+  // Strip trailing slashes
+  cleaned = cleaned.replace(/\/+$/, '');
+  
+  return cleaned.startsWith('http') ? cleaned : fallback;
+}
+
 // Admin Authentication Middleware
 function requireAdmin(req, res, next) {
   const adminPass = req.headers['x-admin-password'] || req.query.adminPassword;
@@ -76,7 +97,7 @@ router.get('/count', async (req, res) => {
 
 /**
  * POST /api/birthdays
- * Register a birthday and send verification email.
+ * Register a birthday, generate token, and send verification email.
  */
 router.post('/', async (req, res) => {
   try {
@@ -98,9 +119,11 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // 1. Generate secure random verification token (64 hex characters)
     const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
+    // 2. Save token to MongoDB
     let birthday = await Birthday.findOne({ email: normalizedEmail });
 
     if (birthday) {
@@ -128,17 +151,20 @@ router.post('/', async (req, res) => {
       await birthday.save();
     }
 
-    const clientUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app').trim().replace(/\/+$/, '');
-    const serverUrl = (process.env.SERVER_URL || `${req.protocol}://${req.get('host')}`).trim().replace(/\/+$/, '');
+    // 3. Resolve backend URL strictly for constructing the verification route link
+    const backendUrl = cleanUrl(
+      process.env.BACKEND_URL || process.env.SERVER_URL,
+      `${req.protocol}://${req.get('host')}`
+    );
 
+    // 4. Send verification email with token
     try {
       await emailService.sendVerificationEmail({
         email: normalizedEmail,
         name: birthday.name,
         dob: birthday.dob,
         token: verificationToken,
-        clientUrl,
-        serverUrl,
+        backendUrl,
       });
     } catch (emailErr) {
       console.error('[ROUTE] Failed to send verification email:', emailErr.message);
@@ -169,30 +195,38 @@ router.post('/', async (req, res) => {
 
 /**
  * GET /api/birthdays/verify/:token
- * Verifies email token and marks the birthday as verified.
+ * Verifies email token and redirects user back to the deployed Vercel frontend.
  */
 router.get('/verify/:token', async (req, res) => {
+  const frontendUrl = cleanUrl(
+    process.env.FRONTEND_URL || process.env.CLIENT_URL,
+    'https://birthday-wall-one.vercel.app'
+  );
+
   try {
     const { token } = req.params;
-    const clientUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app').trim().replace(/\/+$/, '');
 
     if (!token) {
-      return res.redirect(`${clientUrl}/?verificationError=missing_token`);
+      return res.redirect(`${frontendUrl}/?verificationError=missing_token`);
     }
 
+    // Find birthday with this valid, non-expired verificationToken
     const birthday = await Birthday.findOne({
       verificationToken: token,
       verificationTokenExpires: { $gt: new Date() },
     });
 
     if (!birthday) {
-      return res.redirect(`${clientUrl}/?verificationError=invalid_or_expired`);
+      return res.redirect(`${frontendUrl}/?verificationError=invalid_or_expired`);
     }
 
+    // Mark as verified and clear tokens
     birthday.emailVerified = true;
     birthday.verificationToken = null;
     birthday.verificationTokenExpires = null;
     await birthday.save();
+
+    console.log(`[VERIFICATION] ✓ Birthday successfully verified: ${birthday.name} (${birthday.email})`);
 
     // Send immediate birthday wish if their birthday is today
     const now = new Date();
@@ -206,18 +240,19 @@ router.get('/verify/:token', async (req, res) => {
       await emailService.sendBirthdayGreetingEmail({
         email: birthday.email,
         name: birthday.name,
+        clientUrl: frontendUrl,
       });
       birthday.lastWishedYear = now.getFullYear();
       await birthday.save();
     }
 
+    // Final redirect to deployed frontend with confirmation
     return res.redirect(
-      `${clientUrl}/?verified=true&name=${encodeURIComponent(birthday.name)}`
+      `${frontendUrl}/?verified=true&name=${encodeURIComponent(birthday.name)}`
     );
   } catch (error) {
     console.error('Error verifying token:', error);
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    return res.redirect(`${clientUrl}/?verificationError=server_error`);
+    return res.redirect(`${frontendUrl}/?verificationError=server_error`);
   }
 });
 
@@ -237,10 +272,6 @@ router.get('/trigger-wishes', async (req, res) => {
    ADMIN ENDPOINTS (Protected with ADMIN_PASSWORD)
    ========================================================================== */
 
-/**
- * POST /api/birthdays/admin/verify-pass
- * Validates admin password.
- */
 router.post('/admin/verify-pass', (req, res) => {
   const { password } = req.body;
   const configuredPass = process.env.ADMIN_PASSWORD || 'admin123';
@@ -250,10 +281,6 @@ router.post('/admin/verify-pass', (req, res) => {
   return res.status(401).json({ success: false, message: 'Invalid admin password' });
 });
 
-/**
- * GET /api/birthdays/admin/all
- * Returns all birthdays in the database (verified & unverified) with email for moderation.
- */
 router.get('/admin/all', requireAdmin, async (req, res) => {
   try {
     const all = await Birthday.find().sort({ createdAt: -1 }).lean();
@@ -264,10 +291,6 @@ router.get('/admin/all', requireAdmin, async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/birthdays/admin/:id
- * Permanently deletes any birthday entry by ID.
- */
 router.delete('/admin/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;

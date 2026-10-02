@@ -38,12 +38,14 @@ class EmailService {
   /**
    * Sends the birthday confirmation verification email
    */
-  async sendVerificationEmail({ email, name, dob, token, serverUrl }) {
-    const verificationUrl = `${serverUrl}/api/birthdays/verify/${token}`;
+  async sendVerificationEmail({ email, name, dob, token, backendUrl, serverUrl }) {
+    const baseBackend = (backendUrl || serverUrl || process.env.BACKEND_URL || process.env.SERVER_URL || 'https://birthday-wall-x123.onrender.com').trim().replace(/\/+$/, '');
+    const verificationUrl = `${baseBackend}/api/birthdays/verify/${token}`;
     const formattedBirthday = formatBirthdayForEmail(dob);
     const fromAddress = process.env.EMAIL_FROM || 'Birthday Wall <onboarding@resend.dev>';
 
-    console.log(`[EMAIL SERVICE] Attempting to send verification email to: ${email} (Name: ${name})`);
+    console.log(`[EMAIL SERVICE] Sending verification email to: ${email}`);
+    console.log(`[EMAIL SERVICE] Target verification URL base: ${baseBackend}/api/birthdays/verify/<token>`);
 
     const resend = this.getResendClient();
 
@@ -98,7 +100,7 @@ class EmailService {
       });
 
       if (response.error) {
-        console.error(`[EMAIL SERVICE] Resend provider returned an error:`, response.error.message);
+        console.error(`[EMAIL SERVICE] Resend provider error:`, response.error.message);
         throw new Error(response.error.message || 'Resend API failed to deliver email.');
       }
 
@@ -118,7 +120,7 @@ class EmailService {
     const fromAddress = process.env.EMAIL_FROM || 'Birthday Wall <onboarding@resend.dev>';
     const siteUrl = clientUrl || process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app';
 
-    console.log(`[EMAIL SERVICE] Attempting to send birthday greeting to: ${email} (Celebrant: ${name})`);
+    console.log(`[EMAIL SERVICE] Sending birthday greeting to: ${email} (Celebrant: ${name})`);
 
     const resend = this.getResendClient();
     if (!resend) {
