@@ -12,24 +12,47 @@ class EmailService {
   getTransporter() {
     if (this.transporter) return this.transporter;
 
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-      if (process.env.SMTP_HOST.includes('gmail')) {
+    const user = process.env.SMTP_USER;
+    const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = parseInt(process.env.SMTP_PORT || '465', 10);
+    const isGmail = host.includes('gmail') || (user && user.includes('@gmail.com'));
+
+    if (user && pass) {
+      if (isGmail) {
+        // Direct SSL Port 465 configuration for Gmail (avoids cloud outbound timeout on port 587)
         this.transporter = nodemailer.createTransport({
-          service: 'gmail',
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true, // SSL
           auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
+            user,
+            pass,
           },
+          tls: {
+            rejectUnauthorized: false,
+          },
+          family: 4, // Force IPv4 to prevent cloud networking timeouts
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
         });
       } else {
         this.transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT || '587', 10),
-          secure: process.env.SMTP_SECURE === 'true',
+          host,
+          port,
+          secure: port === 465 || process.env.SMTP_SECURE === 'true',
           auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
+            user,
+            pass,
           },
+          tls: {
+            rejectUnauthorized: false,
+          },
+          family: 4,
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
         });
       }
     }
@@ -52,7 +75,7 @@ class EmailService {
     if (transporter) {
       try {
         await transporter.sendMail({
-          from: process.env.EMAIL_FROM || `"${senderName} (Birthday Wall)" <${process.env.SMTP_USER}>`,
+          from: process.env.EMAIL_FROM || `"${senderName}" <${process.env.SMTP_USER}>`,
           to: email,
           subject: 'Confirm your birthday on the Birthday Wall',
           html: `
@@ -94,7 +117,7 @@ class EmailService {
     console.log('======================================================\n');
 
     const transporter = this.getTransporter();
-    const siteUrl = clientUrl || process.env.CLIENT_URL || 'http://localhost:5173';
+    const siteUrl = clientUrl || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app';
 
     if (transporter) {
       try {
@@ -112,7 +135,7 @@ class EmailService {
                 Wishing you a very Happy Birthday! May your day be filled with happiness, celebration, and lots of great memories.
               </p>
 
-              <div style="margin: 24px 0; padding: 20px; background-color: #F4F4EE; border: 1px solid #E5E5DE;">
+              <div style="margin: 24px 0; padding: 20px; background-color: #F4F4EE; border: 1px solid #E55DE;">
                 <p style="margin: 0; font-size: 15px; color: #222222; font-style: italic; line-height: 1.5;">
                   "Wishing you another year of great adventures, success, and good health!"
                 </p>
