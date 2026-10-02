@@ -1,18 +1,5 @@
-// Ensure API_BASE_URL always has /api format with direct live Render fallback
-const getApiBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) {
-    // In production, fallback directly to live Render backend
-    return import.meta.env.PROD 
-      ? 'https://birthday-wall-x123.onrender.com/api' 
-      : 'http://localhost:5000/api';
-  }
-  
-  const clean = envUrl.trim().replace(/\/+$/, '');
-  return clean.endsWith('/api') ? clean : `${clean}/api`;
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// Direct API configuration for live Render backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://birthday-wall-x123.onrender.com/api';
 
 export async function fetchBirthdays() {
   try {
@@ -21,7 +8,7 @@ export async function fetchBirthdays() {
     const data = await res.json();
     return data.data;
   } catch (err) {
-    console.warn(`[Birthday Wall API] Could not fetch from ${API_BASE_URL}/birthdays:`, err.message);
+    console.warn(`[Birthday Wall API] Could not fetch birthdays from ${API_BASE_URL}:`, err.message);
     return null;
   }
 }
