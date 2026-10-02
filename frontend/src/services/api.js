@@ -1,7 +1,12 @@
-// Ensure API_BASE_URL always has /api format regardless of how VITE_API_URL is configured
+// Ensure API_BASE_URL always has /api format with direct live Render fallback
 const getApiBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (!envUrl) return 'http://localhost:5000/api';
+  if (!envUrl) {
+    // In production, fallback directly to live Render backend
+    return import.meta.env.PROD 
+      ? 'https://birthday-wall-x123.onrender.com/api' 
+      : 'http://localhost:5000/api';
+  }
   
   const clean = envUrl.trim().replace(/\/+$/, '');
   return clean.endsWith('/api') ? clean : `${clean}/api`;
