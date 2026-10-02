@@ -38,14 +38,27 @@ class EmailService {
   /**
    * Sends the birthday confirmation verification email
    */
-  async sendVerificationEmail({ email, name, dob, token, backendUrl, serverUrl }) {
-    const baseBackend = (backendUrl || serverUrl || process.env.BACKEND_URL || process.env.SERVER_URL || 'https://birthday-wall-x123.onrender.com').trim().replace(/\/+$/, '');
+  async sendVerificationEmail({ email, name, dob, token, backendUrl }) {
+    // 1. Verify token validity (must be valid 64-char string)
+    if (!token || typeof token !== 'string' || token.length < 10) {
+      console.error('[EMAIL SERVICE] Invalid token received:', typeof token, token?.length);
+      throw new Error('Invalid verification token passed to email service');
+    }
+
+    // 2. Guarantee backend base URL points to Render API
+    const baseBackend = (backendUrl || 'https://birthday-wall-x123.onrender.com').trim().replace(/\/+$/, '');
+    
+    // 3. Construct absolute verification URL: BACKEND_URL + "/api/birthdays/verify/" + token
     const verificationUrl = `${baseBackend}/api/birthdays/verify/${token}`;
+
     const formattedBirthday = formatBirthdayForEmail(dob);
     const fromAddress = process.env.EMAIL_FROM || 'Birthday Wall <onboarding@resend.dev>';
 
-    console.log(`[EMAIL SERVICE] Sending verification email to: ${email}`);
-    console.log(`[EMAIL SERVICE] Target verification URL base: ${baseBackend}/api/birthdays/verify/<token>`);
+    // Safe debugging logs
+    console.log('[EMAIL SERVICE] Verification token exists:', !!token);
+    console.log('[EMAIL SERVICE] Verification token length:', token.length);
+    console.log('[EMAIL SERVICE] Verification URL base:', baseBackend);
+    console.log('[EMAIL SERVICE] Verification URL pattern:', verificationUrl.replace(token, '<64_CHAR_TOKEN>'));
 
     const resend = this.getResendClient();
 

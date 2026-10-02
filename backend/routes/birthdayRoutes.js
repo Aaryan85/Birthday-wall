@@ -7,24 +7,47 @@ import { sendDailyBirthdayWishes } from '../services/scheduler.js';
 const router = express.Router();
 
 /**
- * Sanitizes and extracts clean URL from environment variables
- * Strips accidental variable names, markdown links, brackets, and trailing slashes
+ * Strictly resolves and validates the backend URL (Render API server)
+ * Ignores any invalid strings, variable prefixes, or accidental frontend URLs
  */
-function cleanUrl(rawUrl, fallback) {
-  if (!rawUrl || typeof rawUrl !== 'string') return fallback;
+function resolveBackendUrl(req) {
+  const envBackend = process.env.BACKEND_URL || process.env.SERVER_URL;
   
-  let cleaned = rawUrl.trim();
-  // Remove accidental "VARIABLE_NAME=" prefixes
-  cleaned = cleaned.replace(/^[A-Z_]+=\s*/, '');
-  // Extract URL from markdown format [text](url) or (url) or [url]
-  const urlMatch = cleaned.match(/https?:\/\/[^\s)\]'"]+/);
-  if (urlMatch) {
-    cleaned = urlMatch[0];
+  if (envBackend && typeof envBackend === 'string') {
+    let clean = envBackend.trim().replace(/^[A-Z_]+=\s*/, '').replace(/\/+$/, '');
+    const match = clean.match(/https?:\/\/[^\s)\]'"]+/);
+    if (match) clean = match[0];
+    
+    // If someone accidentally configured the Vercel frontend URL as backend URL, ignore it
+    if (!clean.includes('vercel.app') && clean.startsWith('http')) {
+      return clean;
+    }
   }
-  // Strip trailing slashes
-  cleaned = cleaned.replace(/\/+$/, '');
+
+  // Fallback to request host or default deployed Render backend
+  if (req && req.get('host')) {
+    const host = req.get('host');
+    const protocol = req.protocol === 'https' || host.includes('onrender.com') ? 'https' : req.protocol;
+    return `${protocol}://${host}`;
+  }
+
+  return 'https://birthday-wall-x123.onrender.com';
+}
+
+/**
+ * Strictly resolves and validates the frontend URL (Vercel client)
+ */
+function resolveFrontendUrl() {
+  const envFrontend = process.env.FRONTEND_URL || process.env.CLIENT_URL;
   
-  return cleaned.startsWith('http') ? cleaned : fallback;
+  if (envFrontend && typeof envFrontend === 'string') {
+    let clean = envFrontend.trim().replace(/^[A-Z_]+=\s*/, '').replace(/\/+$/, '');
+    const match = clean.match(/https?:\/\/[^\s)\]'"]+/);
+    if (match) clean = match[0];
+    if (clean.startsWith('http')) return clean;
+  }
+
+  return 'https://birthday-wall-one.vercel.app';
 }
 
 // Admin Authentication Middleware
@@ -123,6 +146,10 @@ router.post('/', async (req, res) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
+    // Safe debugging logs (does NOT log token value)
+    console.log('Verification token generated:', !!verificationToken);
+    console.log('Verification token length:', verificationToken?.length);
+
     // 2. Save token to MongoDB
     let birthday = await Birthday.findOne({ email: normalizedEmail });
 
@@ -152,10 +179,8 @@ router.post('/', async (req, res) => {
     }
 
     // 3. Resolve backend URL strictly for constructing the verification route link
-    const backendUrl = cleanUrl(
-      process.env.BACKEND_URL || process.env.SERVER_URL,
-      `${req.protocol}://${req.get('host')}`
-    );
+    const backendUrl = resolveBackendUrl(req);
+    console.log('Verification URL base:', backendUrl);
 
     // 4. Send verification email with token
     try {
@@ -198,10 +223,7 @@ router.post('/', async (req, res) => {
  * Verifies email token and redirects user back to the deployed Vercel frontend.
  */
 router.get('/verify/:token', async (req, res) => {
-  const frontendUrl = cleanUrl(
-    process.env.FRONTEND_URL || process.env.CLIENT_URL,
-    'https://birthday-wall-one.vercel.app'
-  );
+  const frontendUrl = resolveFrontendUrl();
 
   try {
     const { token } = req.params;
