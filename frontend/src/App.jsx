@@ -38,7 +38,7 @@ export default function App() {
   // Fetch verified data from backend API
   const loadBirthdays = async () => {
     const apiData = await fetchBirthdays();
-    if (apiData && Array.isArray(apiData) && apiData.length > 0) {
+    if (apiData !== null && Array.isArray(apiData)) {
       setBirthdays(apiData);
     }
     const count = await fetchBirthdaysCount();
@@ -71,8 +71,8 @@ export default function App() {
     return { todayList: today, upcomingList: upcoming };
   }, [birthdays]);
 
-  // Display count (prioritizes verified server count, or initial baseline)
-  const totalCount = serverCount !== null ? serverCount : (127 + (birthdays.length - INITIAL_BIRTHDAYS.length));
+  // Display count (prioritizes verified server count, or current items count)
+  const totalCount = serverCount !== null ? serverCount : birthdays.length;
 
   const handleAddBirthday = async (formData) => {
     await registerBirthday(formData);

@@ -12,9 +12,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/birthday_wall';
 
-// Middlewares
+// Open CORS for all frontend clients (Vercel, Localhost, Custom Domains)
 app.use(cors({
-  origin: process.env.CLIENT_URL || '*',
+  origin: true,
   credentials: true,
 }));
 app.use(express.json());
@@ -36,24 +36,6 @@ async function startServer() {
   try {
     await mongoose.connect(MONGODB_URI);
     console.log('✓ Connected to MongoDB successfully');
-
-    // Seed initial verified mock birthdays if database is completely empty
-    const count = await Birthday.countDocuments();
-    if (count === 0) {
-      console.log('Seeding initial verified birthdays...');
-      const seedData = [
-        { name: 'Arjun Kapoor', dob: new Date(1996, 9, 2), email: 'arjun@example.com', emailVerified: true },
-        { name: 'Maya Lin', dob: new Date(1998, 9, 2), email: 'maya@example.com', emailVerified: true },
-        { name: 'Rahul Sharma', dob: new Date(1995, 9, 5), email: 'rahul@example.com', emailVerified: true },
-        { name: 'Sneha Patil', dob: new Date(1997, 9, 8), email: 'sneha@example.com', emailVerified: true },
-        { name: 'Aditya Mehta', dob: new Date(1994, 9, 15), email: 'aditya@example.com', emailVerified: true },
-        { name: 'Ananya Iyer', dob: new Date(1996, 9, 20), email: 'ananya@example.com', emailVerified: true },
-        { name: 'Vikram Singhania', dob: new Date(1993, 9, 24), email: 'vikram@example.com', emailVerified: true },
-        { name: 'Pooja Deshmukh', dob: new Date(1997, 9, 31), email: 'pooja@example.com', emailVerified: true },
-      ];
-      await Birthday.insertMany(seedData);
-      console.log('✓ Initial verified birthdays seeded');
-    }
 
     // Initialize automated 12:00 AM daily birthday wishes scheduler
     initBirthdayScheduler();
