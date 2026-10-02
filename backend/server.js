@@ -12,11 +12,36 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/birthday_wall';
 
-// Open CORS for all frontend clients (Vercel, Localhost, Custom Domains)
+// Clean production frontend URL (guaranteed NO trailing slash)
+const FRONTEND_URL = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app').trim().replace(/\/+$/, '');
+
+const allowedOrigins = [
+  FRONTEND_URL,
+  'https://birthday-wall-one.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
+// Production CORS configuration
 app.use(cors({
-  origin: true,
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    const cleanOrigin = origin.trim().replace(/\/+$/, '');
+    if (allowedOrigins.includes(cleanOrigin)) {
+      return callback(null, cleanOrigin);
+    }
+    return callback(new Error(`CORS policy blocked access from origin: ${origin}`));
+  },
+  methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-password'],
   credentials: true,
+  optionsSuccessStatus: 200,
 }));
+
+// Explicit preflight OPTIONS handler
+app.options('*', cors());
+
 app.use(express.json());
 
 // Routes
@@ -41,12 +66,13 @@ async function startServer() {
     initBirthdayScheduler();
 
     app.listen(PORT, () => {
-      console.log(`✓ Birthday Wall backend server running on http://localhost:${PORT}`);
+      console.log(`✓ Birthday Wall backend server running on port ${PORT}`);
+      console.log(`✓ CORS configured for origin: ${FRONTEND_URL}`);
     });
   } catch (error) {
     console.error('MongoDB connection error:', error.message);
     app.listen(PORT, () => {
-      console.log(`✓ Birthday Wall server running on http://localhost:${PORT} (without active DB connection)`);
+      console.log(`✓ Birthday Wall server running on port ${PORT} (without active DB connection)`);
     });
   }
 }

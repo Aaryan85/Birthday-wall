@@ -128,8 +128,8 @@ router.post('/', async (req, res) => {
       await birthday.save();
     }
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    const serverUrl = process.env.SERVER_URL || `${req.protocol}://${req.get('host')}`;
+    const clientUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app').trim().replace(/\/+$/, '');
+    const serverUrl = (process.env.SERVER_URL || `${req.protocol}://${req.get('host')}`).trim().replace(/\/+$/, '');
 
     await emailService.sendVerificationEmail({
       email: normalizedEmail,
@@ -165,7 +165,7 @@ router.post('/', async (req, res) => {
 router.get('/verify/:token', async (req, res) => {
   try {
     const { token } = req.params;
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const clientUrl = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://birthday-wall-one.vercel.app').trim().replace(/\/+$/, '');
 
     if (!token) {
       return res.redirect(`${clientUrl}/?verificationError=missing_token`);
