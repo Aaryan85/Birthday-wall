@@ -1,13 +1,22 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Ensure API_BASE_URL always has /api format regardless of how VITE_API_URL is configured
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (!envUrl) return 'http://localhost:5000/api';
+  
+  const clean = envUrl.trim().replace(/\/+$/, '');
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export async function fetchBirthdays() {
   try {
     const res = await fetch(`${API_BASE_URL}/birthdays`);
-    if (!res.ok) throw new Error('Failed to fetch birthdays');
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     return data.data;
   } catch (err) {
-    console.warn('Backend not reachable or error, using local fallback:', err.message);
+    console.warn(`[Birthday Wall API] Could not fetch from ${API_BASE_URL}/birthdays:`, err.message);
     return null;
   }
 }
@@ -15,30 +24,38 @@ export async function fetchBirthdays() {
 export async function fetchBirthdaysCount() {
   try {
     const res = await fetch(`${API_BASE_URL}/birthdays/count`);
-    if (!res.ok) throw new Error('Failed to fetch count');
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     return data.count;
   } catch (err) {
-    console.warn('Backend not reachable for count:', err.message);
+    console.warn(`[Birthday Wall API] Could not fetch count:`, err.message);
     return null;
   }
 }
 
 export async function registerBirthday({ name, dob, email }) {
-  const res = await fetch(`${API_BASE_URL}/birthdays`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name, dob, email }),
-  });
+  const targetUrl = `${API_BASE_URL}/birthdays`;
+  console.log(`[Birthday Wall] Submitting birthday to: ${targetUrl}`);
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.message || 'Failed to submit birthday');
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, dob, email }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || `Failed to submit birthday (${res.status})`);
+    }
+
+    return data;
+  } catch (err) {
+    console.error('[Birthday Wall] Register error:', err);
+    throw new Error(err.message || 'Failed to connect to backend server');
   }
-
-  return data;
 }
 
 /* ==========================================================================
