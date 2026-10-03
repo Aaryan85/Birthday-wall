@@ -18,6 +18,7 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'htt
 const allowedOrigins = [
   FRONTEND_URL,
   'https://birthday-wall-one.vercel.app',
+  'https://birthday.aaryanbuilds.in',
   'http://localhost:5173',
   'http://localhost:3000',
 ];
