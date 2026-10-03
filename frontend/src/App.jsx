@@ -12,8 +12,9 @@ import { CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function App() {
-  const [birthdays, setBirthdays] = useState(INITIAL_BIRTHDAYS);
+  const [birthdays, setBirthdays] = useState([]);
   const [serverCount, setServerCount] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -35,15 +36,31 @@ export default function App() {
     }
   }, []);
 
-  // Fetch verified data from backend API
-  const loadBirthdays = async () => {
-    const apiData = await fetchBirthdays();
-    if (apiData !== null && Array.isArray(apiData)) {
-      setBirthdays(apiData);
-    }
-    const count = await fetchBirthdaysCount();
-    if (count !== null) {
-      setServerCount(count);
+  // Fetch verified data from backend API with automatic retry on server wakeup
+  const loadBirthdays = async (retryCount = 0) => {
+    try {
+      const [apiData, count] = await Promise.all([
+        fetchBirthdays(),
+        fetchBirthdaysCount()
+      ]);
+
+      if (apiData !== null && Array.isArray(apiData)) {
+        setBirthdays(apiData);
+        setIsLoading(false);
+      } else if (retryCount < 5) {
+        // If server is cold-starting on Render, retry after 3 seconds
+        setTimeout(() => loadBirthdays(retryCount + 1), 3000);
+        return;
+      } else {
+        setIsLoading(false);
+      }
+
+      if (count !== null) {
+        setServerCount(count);
+      }
+    } catch (err) {
+      console.error('Error fetching birthdays:', err);
+      setIsLoading(false);
     }
   };
 
@@ -100,17 +117,20 @@ export default function App() {
         <main className="flex-grow">
           <Hero 
             totalCount={totalCount} 
+            isLoading={isLoading}
             onOpenAddModal={() => setIsModalOpen(true)} 
           />
 
-          {/* Today's Section (Subtly highlighted) */}
-          <TodaySection todayBirthdays={todayList} />
+          {/* Today's Section (Only shown when not loading and there are today celebrants) */}
+          {!isLoading && <TodaySection todayBirthdays={todayList} />}
 
           {/* Upcoming Editorial Birthday List */}
           <BirthdayList
             birthdays={upcomingList}
+            isLoading={isLoading}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            onOpenAddModal={() => setIsModalOpen(true)}
           />
 
           {/* Footer Call to Action */}

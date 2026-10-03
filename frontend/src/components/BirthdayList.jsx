@@ -1,13 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X } from 'lucide-react';
+import { Search, X, Loader2, Plus } from 'lucide-react';
 import { formatBirthdayDisplay, calculateDaysRemaining } from '../data/mockBirthdays';
 
 export default function BirthdayList({
   birthdays = [],
+  isLoading = false,
   searchQuery = '',
   setSearchQuery,
+  onOpenAddModal,
 }) {
+  const [slowLoadMessage, setSlowLoadMessage] = useState(false);
+
+  // If server takes longer than 4s to respond (Render cold start)
+  useEffect(() => {
+    let timer;
+    if (isLoading) {
+      timer = setTimeout(() => {
+        setSlowLoadMessage(true);
+      }, 3500);
+    } else {
+      setSlowLoadMessage(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
   const filtered = birthdays.filter(b => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
@@ -29,29 +46,85 @@ export default function BirthdayList({
           </div>
 
           {/* Search Input */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-wall-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name..."
-              className="w-full bg-white text-sm text-wall-dark placeholder:text-wall-subtle pl-9 pr-8 py-2 border border-wall-border focus:outline-none focus:border-wall-dark transition-colors"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-wall-subtle hover:text-wall-dark"
-                aria-label="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          {!isLoading && birthdays.length > 0 && (
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-wall-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name..."
+                className="w-full bg-white text-sm text-wall-dark placeholder:text-wall-subtle pl-9 pr-8 py-2 border border-wall-border focus:outline-none focus:border-wall-dark transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-wall-subtle hover:text-wall-dark"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Editorial Birthday List */}
-        {filtered.length === 0 ? (
+        {/* 1. LOADING SKELETON STATE */}
+        {isLoading ? (
+          <div className="divide-y divide-wall-border border-b border-wall-border">
+            {[1, 2, 3, 4].map((n) => (
+              <div
+                key={n}
+                className="py-6 px-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-pulse"
+              >
+                <div className="flex items-start gap-6">
+                  <span className="font-mono text-xs text-wall-subtle pt-0.5 w-6">
+                    0{n}
+                  </span>
+                  <div className="space-y-2">
+                    <div className="h-5 bg-neutral-200/80 w-44 sm:w-56 rounded-none" />
+                    <div className="h-3 bg-neutral-200/50 w-24 rounded-none" />
+                  </div>
+                </div>
+                <div className="pl-10 sm:pl-0 flex flex-col sm:items-end gap-1.5">
+                  <div className="h-4 bg-neutral-200/80 w-16 rounded-none" />
+                  <div className="h-3 bg-neutral-200/50 w-20 rounded-none hidden sm:block" />
+                </div>
+              </div>
+            ))}
+
+            {/* Server Wakeup Notification */}
+            <div className="py-6 flex items-center justify-center gap-2.5 text-xs font-mono text-wall-muted">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>
+                {slowLoadMessage
+                  ? 'Waking up cloud server... Please wait a moment.'
+                  : 'Connecting to live Birthday Wall...'}
+              </span>
+            </div>
+          </div>
+        ) : birthdays.length === 0 ? (
+          /* 2. EMPTY WALL STATE (No birthdays registered yet) */
+          <div className="py-20 text-center border-b border-wall-border space-y-4">
+            <span className="text-3xl select-none">🎈</span>
+            <h3 className="text-lg font-bold text-wall-dark tracking-tight font-sans">
+              No birthdays on the wall yet
+            </h3>
+            <p className="text-sm text-wall-muted max-w-sm mx-auto font-normal">
+              Be the very first person to add your birthday to the public wall!
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={onOpenAddModal}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-wall-dark text-white hover:bg-black font-medium text-xs font-mono transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Your Birthday</span>
+              </button>
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          /* 3. NO SEARCH RESULTS */
           <div className="py-20 text-center border-b border-wall-border">
             <p className="text-base text-wall-muted font-normal">
               No birthdays found matching "<span className="text-wall-dark font-medium">{searchQuery}</span>"
@@ -66,6 +139,7 @@ export default function BirthdayList({
             )}
           </div>
         ) : (
+          /* 4. LIVE BIRTHDAYS LIST */
           <div className="divide-y divide-wall-border border-b border-wall-border">
             <AnimatePresence mode="popLayout">
               {filtered.map((item, index) => {

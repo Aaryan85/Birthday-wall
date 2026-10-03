@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 
-export default function Hero({ totalCount = 127, onOpenAddModal }) {
+export default function Hero({ totalCount = 0, isLoading = false, onOpenAddModal }) {
   return (
     <section className="pt-16 pb-16 border-b border-wall-border">
       <div className="max-w-4xl mx-auto px-6">
@@ -28,14 +28,18 @@ export default function Hero({ totalCount = 127, onOpenAddModal }) {
           {/* Prominent Counter & CTA Action */}
           <div className="pt-4 flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-8">
             {/* Visually prominent counter */}
-            <div className="flex items-center gap-3 py-2 px-3.5 bg-wall-highlight border border-wall-border self-start sm:self-auto">
+            <div className="flex items-center gap-3 py-2 px-3.5 bg-wall-highlight border border-wall-border self-start sm:self-auto min-h-[46px]">
               <span className="text-xl select-none" role="img" aria-label="Birthday cake">
                 🎂
               </span>
               <div className="flex items-baseline gap-1.5 font-mono">
-                <span className="text-2xl font-bold text-wall-dark tracking-tight">
-                  {totalCount}
-                </span>
+                {isLoading ? (
+                  <span className="inline-block w-8 h-6 bg-neutral-200/80 animate-pulse" />
+                ) : (
+                  <span className="text-2xl font-bold text-wall-dark tracking-tight">
+                    {totalCount}
+                  </span>
+                )}
                 <span className="text-xs uppercase tracking-wider text-wall-muted font-medium font-sans">
                   birthdays registered
                 </span>
