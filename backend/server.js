@@ -2,11 +2,22 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+// 1. Import TraceBack SDK
+import { TraceBack } from 'traceback-node';
 import birthdayRoutes from './routes/birthdayRoutes.js';
 import Birthday from './models/Birthday.js';
 import { initBirthdayScheduler } from './services/scheduler.js';
 
 dotenv.config();
+
+// 2. Initialize TraceBack SDK
+TraceBack.init({
+  endpoint: process.env.TRACEBACK_ENDPOINT || 'https://traceback-server.onrender.com/api/v1/events',
+  projectKey: process.env.TRACEBACK_PROJECT_KEY,
+  environment: process.env.NODE_ENV || 'production',
+  service: 'birthday-wall-backend',
+  release: 'v1.0.0'
+});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,6 +56,9 @@ app.options('*', cors());
 
 app.use(express.json());
 
+// 3. TraceBack request handler (MUST be before routes)
+app.use(TraceBack.requestHandler());
+
 // Routes
 app.use('/api/birthdays', birthdayRoutes);
 
@@ -56,6 +70,25 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Safe test route (catches error internally, will NEVER crash your server)
+app.get('/api/debug-traceback', (req, res) => {
+  try {
+    throw new Error('Test production error from Birthday Wall backend');
+  } catch (err) {
+    TraceBack.captureException(err, {
+      source: 'birthday-wall-render-test',
+      route: 'GET /api/debug-traceback'
+    });
+    res.json({
+      success: true,
+      message: 'Captured by TraceBack! Your Birthday Wall server is 100% fine.'
+    });
+  }
+});
+
+// 4. TraceBack error handler (MUST be after all routes)
+app.use(TraceBack.errorHandler());
 
 // Database Connection & Server Initialization
 async function startServer() {
